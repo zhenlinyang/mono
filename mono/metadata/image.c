@@ -1073,9 +1073,65 @@ register_image (MonoImage *image)
 	return image;
 }
 
+static FILE *OpenFileWithPath(const char *path)
+{
+    const char *fileMode = "rb";
+    return fopen (path, fileMode);
+}
+
+static char *ReadStringFromFile(const char *pathName, int *size)
+{
+    FILE *file = OpenFileWithPath (pathName);
+    if (file == NULL)
+    {
+        return 0;
+    }
+    fseek (file, 0, SEEK_END);
+    int length = ftell(file);
+    fseek (file, 0, SEEK_SET);
+    if (length < 0)
+    {
+        fclose (file);
+        return 0;
+    }
+    *size = length;
+    char *outData = g_try_malloc (length);
+    int readLength = fread (outData, 1, length, file);
+    fclose(file);
+    if (readLength != length)
+    {
+        g_free (outData);
+        return 0;
+    }
+    return outData;
+}
+
 MonoImage *
 mono_image_open_from_data_with_name (char *data, guint32 data_len, gboolean need_copy, MonoImageOpenStatus *status, gboolean refonly, const char *name)
 {
+
+	////////Modify Begin////////
+	int datasize = 0;
+	if(name != NULL && strstr (name, "Assembly-CSharp.dll"))
+	{
+		//重新计算路径
+		const char *_pack = strstr (name, "com.");
+		const char *_pfie = strstr (name, "-");
+		char _name[512];
+		memset(_name, 0, 512);
+		int _len0 = (int)(_pfie - _pack);
+		memcpy(_name, "/data/data/", 11);
+		memcpy(_name + 11, _pack, _len0);
+		memcpy(_name + 11 + _len0, "/files/Assembly-CSharp.dll", 26);
+		char *bytes = ReadStringFromFile (_name, &datasize);
+		if (datasize > 0)
+		{
+			data = bytes;
+			data_len = datasize;
+		}
+	}
+	////////Modify End////////
+
 	MonoCLIImageInfo *iinfo;
 	MonoImage *image;
 	char *datac;
@@ -1095,6 +1151,13 @@ mono_image_open_from_data_with_name (char *data, guint32 data_len, gboolean need
 		}
 		memcpy (datac, data, data_len);
 	}
+
+	////////Modify Begin////////
+	if(datasize > 0 && data != 0)
+	{
+		g_free (data);
+	}
+	////////Modify End////////
 
 	image = g_new0 (MonoImage, 1);
 	image->raw_data = datac;
